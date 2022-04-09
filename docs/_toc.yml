@@ -9,9 +9,11 @@ subtrees:
 - caption: Example
   entries:
   - file: example/index
-    entries:
-    - file: example/subfolder/page
-    - glob: example/globfolder/*
+    subtrees:
+    - titlesonly: True
+      entries:
+      - file: example/subfolder/page
+      - glob: example/globfolder/*
 - caption: Links
   entries:
   - title: GitHub Repository
