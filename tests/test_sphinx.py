@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 
 import pytest
+import xml.etree.ElementTree as ET
+from html.entities import name2codepoint
 from sphinx.testing.path import path as sphinx_path
 from sphinx.testing.util import SphinxTestApp
 
@@ -163,3 +165,30 @@ external_toc_path = {Path(os.path.abspath(toc_path)).as_posix()!r}
     # run sphinx
     builder = sphinx_build_factory(src_dir)
     builder.build()
+
+@pytest.mark.parametrize(
+    "path", TOC_FILES, ids=[path.name.rsplit(".", 1)[0] for path in TOC_FILES]
+)
+def test_strict_titlesonly(path: Path, tmp_path: Path, sphinx_build_factory):
+    """Test that ``titlesonly`` strictness is applied."""
+    src_dir = tmp_path / "srcdir"
+    # write document files
+    site_map = create_site_from_toc(path, root_path=src_dir)
+    # write conf.py
+    src_dir.joinpath("conf.py").write_text(
+        CONF_CONTENT
+        + (
+            "external_toc_enforce_titlesonly = True\n" +
+            "external_toc_exclude_missing = True"
+            if site_map.meta.get("exclude_missing") is True
+            else ""
+        ),
+        encoding="utf8",
+    )
+    # run sphinx
+    builder = sphinx_build_factory(src_dir)
+    builder.build()
+    if path.name == "titlesonly.yml":
+        intro = (builder.outdir / "intro.html").read_text(encoding="utf8")
+        assert intro.find("doc3.html") > 1
+        assert intro.find("doc4.html") < 1

@@ -1,10 +1,10 @@
 """Sphinx event functions and directives."""
 import glob
 from pathlib import Path, PurePosixPath
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, Iterable, cast
 
 from docutils import nodes
-from sphinx.addnodes import toctree as toctree_node
+from sphinx.addnodes import toctree as toctree_node, compact_paragraph
 from sphinx.application import Sphinx
 from sphinx.config import Config
 from sphinx.environment import BuildEnvironment
@@ -139,6 +139,45 @@ def add_changed_toctrees(
     filenames = site_map.get_changed(previous_map)
     return {remove_suffix(name, app.config.source_suffix) for name in filenames}
 
+
+def enforce_titlesonly(app: Sphinx, doctree: nodes.document, docname: str) -> None:
+    """Enforce titlesonly setting for subtrees like the following example::
+
+       ...
+       entries:
+       - file: somedir/index
+         subtrees:
+         - titlesonly: True
+           entries:
+           - file: somedir/subdir/somepage
+           - file: somedir/subdir/otherpage
+
+    The purpose of the function is to remove the subordinate bullet
+    list in the navigation that might appear for headings in ``somepage``
+    or ``otherpage``.
+    """
+    if not app.config["external_toc_enforce_titlesonly"]:
+        return
+
+    # Satisfy the signature and the linters.
+    del doctree
+
+    site_map: SiteMap = app.env.external_site_map
+    for doc in site_map.values():
+        if docname not in doc.child_files():
+            continue
+        # The file, docname, is in the parent, check for titlesonly.
+        for subtree in doc.subtrees:
+            if docname in subtree.files() and subtree.titlesonly:
+                toc = app.env.tocs[docname].deepcopy()
+                children = cast(Iterable[nodes.Element], toc)
+                if children.tagname != "bullet_list":
+                    continue
+                # The conditions are absurdly narrow, but it seems to fit the pattern.
+                for toplevel in children:
+                    if len(toplevel) == 2 and isinstance(toplevel[0], compact_paragraph) and isinstance(toplevel[1], nodes.bullet_list):
+                       toplevel.pop(1)
+                       app.env.tocs[docname] = children
 
 class TableOfContentsNode(nodes.Element):
     """A placeholder for the insertion of a toctree (in ``insert_toctrees``)."""
